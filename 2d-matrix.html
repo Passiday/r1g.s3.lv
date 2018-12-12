@@ -1,0 +1,443 @@
+﻿<html>
+<title>2D matrix transformations</title>
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.1/jquery.min.js"></script>
+<script src="js/SVGBuilder.js" charset="utf-8"></script>
+<script src="js/Matrix.js" charset="utf-8"></script>
+<script src="js/Vertex.js" charset="utf-8"></script>
+<script>
+
+function Plot2D(containerId) {
+	this.containerId = containerId;
+	this.shapes = {};
+}
+Plot2D.prototype.addShape = function(shapeId, shape) {
+	this.shapes[shapeId] = shape;
+}
+Plot2D.prototype.update = function(extraContent) {
+
+	var svgContent = new SVGBuilder();
+	var container = document.getElementById(this.containerId);
+
+	var viewboxWidth = container.offsetWidth;
+	var viewboxHeight = container.offsetHeight;
+	this.origin = {x:viewboxWidth / 2, y:viewboxHeight / 2};
+
+	// Draw the axis and gridlines
+	for (var x = this.origin.x - 10 * Math.round(this.origin.x / 10); x < viewboxWidth; x += 10) {
+		svgContent.addLine({
+			"x1": x,
+			"y1": 0,
+			"x2": x,
+			"y2": viewboxHeight,
+			"class": "systemGridLine"
+		});		
+	}
+	for (var y = this.origin.y - 10 * Math.round(this.origin.y / 10); y < viewboxHeight; y += 10) {
+		svgContent.addLine({
+			"x1": 0,
+			"y1": y,
+			"x2": viewboxWidth,
+			"y2": y,
+			"class": "systemGridLine"
+		});		
+	}
+	svgContent.addLine({
+		"x1": this.origin.x,
+		"y1": 0,
+		"x2": this.origin.x,
+		"y2": viewboxHeight,
+		"class": "systemAxisLine"
+	});
+	svgContent.addLine({
+		"x1": 0,
+		"y1": this.origin.y,
+		"x2": viewboxWidth,
+		"y2": this.origin.y,
+		"class": "systemAxisLine"
+	});
+
+	// Draw the shapes
+	for (var shapeId in this.shapes) {
+		var shape = this.shapes[shapeId];
+		shape.xform();
+		for (var pi = 0, shapeStart = null; pi <= shape.xdata.length; pi++) {
+			if (shapeStart === null) {
+				shapeStart = pi;
+				continue;
+			}
+			if (pi == shape.xdata.length || shape.xdata[pi] === null) {
+				if (shape.type == "closed") {
+					// End of current piece, so close the end
+					svgContent.addLine({
+						"x1": this.origin.x + shape.xdata[pi - 1].x,
+						"y1": this.origin.y + shape.xdata[pi - 1].y,
+						"x2": this.origin.x + shape.xdata[shapeStart].x,
+						"y2": this.origin.y + shape.xdata[shapeStart].y,
+						"class": shape["class"]
+					});
+				}
+				shapeStart = null;
+			} else {
+				svgContent.addLine({
+					"x1": this.origin.x + shape.xdata[pi - 1].x,
+					"y1": this.origin.y + shape.xdata[pi - 1].y,
+					"x2": this.origin.x + shape.xdata[pi].x,
+					"y2": this.origin.y + shape.xdata[pi].y,
+					"class": shape["class"]
+				});			
+			}
+		}
+	}
+
+	if (extraContent) {
+		extraContent(this, svgContent);
+	}
+
+	svgContent.insert(container, true);
+}
+
+function Plot2DShape(data, type, shapeClass) {
+	this.data = data;
+	this.type = type;
+	this["class"] = shapeClass;
+	this.matrix = null;
+	this.xdata = []; // Stores data with transformed vertexes
+	this.xform();
+}
+Plot2DShape.prototype.xform = function(matrix) {
+	if (matrix) this.matrix = matrix;
+	for (var pi = 0; pi < this.data.length; pi++) {
+		if (this.data[pi] !== null) {
+			var v = new Vertex2D(this.data[pi].x, this.data[pi].y);
+			if (this.matrix) {
+				var m = this.matrix;
+				v = v.xform(new Matrix(2, 2, [
+					m.xx, m.xy,
+					m.yx, m.yy
+				]));
+				v = v.translate(
+					m.xt,
+					m.yt
+				);
+			}
+			this.xdata[pi] = v;
+		} else {
+			this.xdata[pi] = null;
+		}
+	}
+}
+Plot2DShape.prototype.testInside = function(pt) {
+	// Tests if the point is inside the shape
+	// Reference: http://jsfromhell.com/math/is-point-in-poly and https://wrf.ecse.rpi.edu//Research/Short_Notes/pnpoly.html
+	if (this.type != "closed") return false;
+	// Prepare the dataset in correct format to handle multiple pieces/holes
+	var poly = [];
+	poly.push({x:0, y:0});
+	for (var pi = 0, shapeStart = null; pi <= this.xdata.length; pi++) {
+		if (shapeStart === null) {
+			shapeStart = pi;
+		}
+		if (pi == this.xdata.length || this.xdata[pi] === null) {
+			poly.push(this.xdata[shapeStart]);
+			poly.push({x:0, y:0});
+			shapeStart = null;
+		} else {
+			poly.push(this.xdata[pi]);
+		}
+	}
+	// Do the test
+	for(var c = false, i = -1, l = poly.length, j = l - 1; ++i < l; j = i)
+        ((poly[i].y <= pt.y && pt.y < poly[j].y) || (poly[j].y <= pt.y && pt.y < poly[i].y))
+        && (pt.x < (poly[j].x - poly[i].x) * (pt.y - poly[i].y) / (poly[j].y - poly[i].y) + poly[i].x)
+        && (c = !c);
+
+	return c;
+}
+Plot2DShape.text2data = function(text) {
+	var lines = text.split(/\n/g);
+	var output = [];
+	var status = true;
+	lines.forEach(function(line) {
+		if (!line.trim()) {
+			if (!output.length || output[output.length - 1] !== null) output.push(null);
+			return;
+		}
+		var values = /^(-?\d*\.?\d*)\s*(-?\d*\.?\d*)/.exec(line);
+		if (values) {
+			var v = {
+				x: parseFloat(values[1]),
+				y: parseFloat(values[2])
+			};
+			if (isNaN(v.x) || isNaN(v.y)) {
+				status = false;	
+			} else {
+				output.push(v);
+			}
+		} else {
+			status = false;
+		}
+	});
+	// Strip the leading nulls
+	while (output.length && output[0] === null) output.shift();
+	// Strip the trailing nulls
+	while (output.length && output[output.length - 1] === null) output.pop();
+
+	return status ? output : null;
+}
+
+$(function() {
+
+	var plot = new Plot2D("graphics");
+
+	/*
+	var shapeData_A = [
+		{x: 40, y:  0},
+		{x: 70, y:  0},
+		{x:110, y:120},
+		{x: 80, y:120},
+		{x: 70, y: 90},
+		{x: 40, y: 90},
+		{x: 30, y:120},
+		{x:  0, y:120},
+		null,
+		{x: 50, y: 60},
+		{x: 55, y: 45},
+		{x: 60, y: 60}
+	];
+	plot.addShape("A", new Plot2DShape(shapeData_A, "closed", "polyLineGreen"));
+	plot.addShape("A1", new Plot2DShape(shapeData_A, "closed", "polyLineRed"));
+	*/
+
+	plot.update();
+
+	var DragMaster = {
+		activeHandler: null,
+		dragStart: null,
+		registerHandler: function(handler) {
+			$("#" + handler.dragHandleId).bind("mousedown", function(event) {
+			    DragMaster.activeHandler = handler;
+			    handler.onstart();
+			    DragMaster.dragStart = {
+			        x: event.pageX,
+			        y: event.pageY
+			    }
+			    event.preventDefault();
+			});
+		},
+		init: function() {
+			$(window).bind("mousemove", function(event) {
+			    if (DragMaster.activeHandler) {
+			        var dragVector = {
+			        	x: event.pageX - DragMaster.dragStart.x,
+			        	y: event.pageY - DragMaster.dragStart.y
+			        };
+			        DragMaster.activeHandler.ondrag(dragVector);
+			    }
+			});
+			$(window).bind("mouseup", function(event) {
+				if (DragMaster.activeHandler) {
+					DragMaster.activeHandler.onend();
+			    	DragMaster.activeHandler = null;
+			    }
+			});			
+		}
+	}
+
+	// Matrix value input drag handlers
+	function MatrixValue(id) {
+		this.id = id;
+		this.dragHandleId = "matrix-" + id + "-handle";
+		this.ctr = document.getElementById("matrix-" + id);
+		this.startValue = null;
+		this.step = MatrixValue.step[id];
+		var self = this;
+		// Populate the default value
+		this.ctr.value = MatrixValue.matrix[id];
+		// Bind the change event
+		$(this.ctr).bind("change", function(event) {
+			MatrixValue.matrix[id] = parseFloat(event.target.value);
+			self.updatePlot();
+		});
+	}
+	MatrixValue.matrix = {
+		xx: 1, xy: 0, xt: 0,
+		yx: 0, yy: 1, yt: 0
+	};
+	MatrixValue.step = {
+		xx: 0.1, xy: 0.1, xt: 1,
+		yx: 0.1, yy: 0.1, yt: 1
+	};
+	MatrixValue.prototype.onstart = function() {
+		// Invoked when user presses mouse button
+		this.startValue = parseFloat(this.ctr.value); 
+	}
+	MatrixValue.prototype.ondrag = function(dragVector) {
+		// Invoked when user drags mouse
+		var newValue = this.startValue + this.step * (dragVector.x + dragVector.y);
+		MatrixValue.matrix[this.id] = newValue;
+		this.ctr.value = Math.round(1000 * newValue) / 1000;
+		this.updatePlot();
+	}
+	MatrixValue.prototype.onend = function(id) {
+		// Invoked when user releases the mouse button
+	}
+	MatrixValue.prototype.updatePlot = function() {
+		plot.update();
+	}
+
+	// Register the drag handlers
+	for (var matrixValueId in MatrixValue.matrix) {
+		DragMaster.registerHandler(new MatrixValue(matrixValueId));
+	}
+	DragMaster.init();
+
+	$("#hitTest").bind("click", function(event) {
+		plot.update(function(plot, svgContent) {
+			for (var x = -400; x <= 400; x += 10) {
+				for (var y = -300; y <= 300; y += 10) {
+					if (plot.shapes.A1.testInside({x:x + 5, y:y + 5})) {
+						svgContent.addRect({
+							"x": plot.origin.x + x + 1,
+							"y": plot.origin.y + y + 1,
+							"width": 9,
+							"height": 9,
+							"class": "hitTest"
+						});
+					}		
+				}
+			}
+		})
+	});
+
+
+	var defaultShapeData = [
+		"40 0",
+		"70 0",
+		"110 120",
+		"80 120",
+		"70 90",
+		"40 90",
+		"30 120",
+		"0 120",
+		"",
+		"50 60",
+		"55 45",
+		"60 60"
+	].join("\n");
+	$("#shapeData").bind("input", function(event) {
+		var shapeData = Plot2DShape.text2data(event.target.value);
+		if (shapeData) {
+			$(event.target).css("background-color","#fff");
+			plot.shapes = {};
+			plot.addShape("A", new Plot2DShape(shapeData, "closed", "polyLineGreen"));
+			plot.addShape("A1", new Plot2DShape(shapeData, "closed", "polyLineRed"));
+			// Link the matrix
+			plot.shapes["A1"].matrix = MatrixValue.matrix;
+			plot.update();
+		} else {
+			$(event.target).css("background-color","#fee");
+		}
+	});
+	$("#shapeData").val(defaultShapeData);
+	$("#shapeData").trigger("input");
+});
+</script>
+<style type="text/css">
+#testbox {
+    position:absolute;
+    left:30px;
+    top:30px;
+    width:800px;
+    height:600px;
+    text-align:center;
+    cursor: crosshair;
+    -moz-user-select: none; -webkit-user-select: none; -ms-user-select:none; user-select:none;-o-user-select:none;
+    border: 1px solid #eee;
+    background-color:#fff;
+}
+#graphics {
+    position: absolute;    
+    width: 100%;
+    height: 100%;
+    top: 0px;
+    left: 0px;
+}
+#graphics svg {
+    width: 100%;
+    height: 100%;
+}
+#inputPanel {
+    position:absolute;
+    left:840px;
+    top:30px;
+    width:250px;
+    height:600px;
+    padding: 10px;
+    text-align:center;
+    border: 1px solid #eee;
+    background-color:#fff;
+}
+#inputPanel h1 {
+	clear: both;
+	font-size: 20px;
+	font-family: sans-serif, Arial;
+	font-weight: bold;
+}
+#inputPanel input.matrix-value {
+	float: left;
+	width: 50px;
+}
+
+#inputPanel span.dragHandle {
+	width: 16px;
+    height: 16px;
+    background: #ccc;
+    display: block;
+    margin: 2px 10px 2px 2px;
+    float: left;
+    border-radius: 50%;
+    cursor: row-resize;
+}
+
+.systemAxisLine {
+    stroke: #8888;
+    stroke-width: 2;
+}
+.systemGridLine {
+    stroke: #eee;
+    stroke-width: 1;
+}
+.polyLineGreen {
+    stroke: #0e0;
+    stroke-width: 2;
+}
+.polyLineRed {
+    stroke: #e00;
+    stroke-width: 1.5;
+}
+
+.hitTest {
+	fill: #00f;
+}
+
+</style>
+<body>
+  <div id="testbox">
+    <div id="graphics"></div>
+  </div>
+  <div id="inputPanel">
+  	<h1>Shape data</h1>
+  	<textarea id="shapeData" style="width:100%; height:200px;"></textarea>
+  	<h1>Transformation matrix</h1>
+    <input id= "matrix-xx" type="text" class="matrix-value"><span id="matrix-xx-handle" class="dragHandle"></span>
+    <input id= "matrix-xy" type="text" class="matrix-value"><span id="matrix-xy-handle" class="dragHandle"></span>
+    <input id= "matrix-xt" type="text" class="matrix-value"><span id="matrix-xt-handle" class="dragHandle"></span>
+    <br>
+    <input id= "matrix-yx" type="text" class="matrix-value"><span id="matrix-yx-handle" class="dragHandle"></span>
+    <input id= "matrix-yy" type="text" class="matrix-value"><span id="matrix-yy-handle" class="dragHandle"></span>
+    <input id= "matrix-yt" type="text" class="matrix-value"><span id="matrix-yt-handle" class="dragHandle"></span>
+  	<h1>Hit test</h1>
+  	<button id="hitTest">Test</button>
+  </div>
+</body>
+</html>
