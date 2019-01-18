@@ -9,7 +9,7 @@ TODO:
 function SVGBuilder() {
   this.document = document.createElementNS("http://www.w3.org/2000/svg", "svg");
 }
-SVGBuilder.prototype.addElement = function(elementName, attr, attrList) {
+SVGBuilder.prototype.addElement = function(elementName, attr, attrList, nodeValue) {
   var element = document.createElementNS("http://www.w3.org/2000/svg", elementName);
   attrList.forEach(function(attrName) {
     if (attrName in attr) {
@@ -21,6 +21,7 @@ SVGBuilder.prototype.addElement = function(elementName, attr, attrList) {
       }
       element.setAttribute(attrName, attrValue);
     }
+    if (nodeValue !== undefined) element.innerHTML = nodeValue;
   });
   this.document.appendChild(element);
 }
@@ -32,6 +33,9 @@ SVGBuilder.prototype.addRect = function(attr) {
 }
 SVGBuilder.prototype.addCircle = function(attr) {
   this.addElement("circle", attr, ["cx", "cy", "r", "stroke", "stroke-width", "fill", "style", "class", "onclick"]);
+}
+SVGBuilder.prototype.addText = function(attr, value) {
+  this.addElement("text", attr, ["x", "y", "fill", "style", "class", "onclick"], value);
 }
 SVGBuilder.prototype.insert = function(parent, wipe) {
   if (wipe) {

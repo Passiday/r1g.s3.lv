@@ -1,0 +1,508 @@
+﻿<html>
+<head>
+<meta charset="UTF-8">
+<title>Segment crossing test</title>
+<script src="//ajax.googleapis.com/ajax/libs/jquery/1.10.1/jquery.min.js"></script>
+<script src="//ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+<script src="js/SVGBuilder.js" charset="utf-8"></script>
+<script src="js/Matrix.js" charset="utf-8"></script>
+<script src="js/Vertex.js" charset="utf-8"></script>
+<script>
+
+function Plot2D(containerId) {
+    this.containerId = containerId;
+    this.shapes = {};
+}
+Plot2D.prototype.addShape = function(shapeId, shape) {
+    this.shapes[shapeId] = shape;
+}
+Plot2D.prototype.update = function(extraContent) {
+
+    var svgContent = new SVGBuilder();
+    var container = document.getElementById(this.containerId);
+
+    var viewboxWidth = container.offsetWidth;
+    var viewboxHeight = container.offsetHeight;
+    this.origin = {x:viewboxWidth / 2, y:viewboxHeight / 2};
+
+    // Draw the axis and gridlines
+    for (var x = this.origin.x - 10 * Math.round(this.origin.x / 10); x < viewboxWidth; x += 10) {
+        svgContent.addLine({
+            "x1": x,
+            "y1": 0,
+            "x2": x,
+            "y2": viewboxHeight,
+            "class": "systemGridLine"
+        });        
+    }
+    for (var y = this.origin.y - 10 * Math.round(this.origin.y / 10); y < viewboxHeight; y += 10) {
+        svgContent.addLine({
+            "x1": 0,
+            "y1": y,
+            "x2": viewboxWidth,
+            "y2": y,
+            "class": "systemGridLine"
+        });        
+    }
+    svgContent.addLine({
+        "x1": this.origin.x,
+        "y1": 0,
+        "x2": this.origin.x,
+        "y2": viewboxHeight,
+        "class": "systemAxisLine"
+    });
+    svgContent.addLine({
+        "x1": 0,
+        "y1": this.origin.y,
+        "x2": viewboxWidth,
+        "y2": this.origin.y,
+        "class": "systemAxisLine"
+    });
+
+    if (extraContent) {
+        extraContent(this, svgContent);
+    }
+
+    svgContent.insert(container, true);
+}
+
+$(function() {
+
+    var plot = new Plot2D("graphics");
+    plot.update();
+
+    var plotConfig = {
+        minX: -40,
+        maxX: 40,
+        minY: -30,
+        maxY: 30,
+        scaleX: 10,
+        scaleY: 10
+    }
+    function getRandomPoint(config) {
+        var rangeX = config.maxX - config.minX;
+        var rangeY = config.maxY - config.minY;
+        var result = {
+            x: config.minX + Math.floor(Math.random() * rangeX),
+            y: config.minY + Math.floor(Math.random() * rangeY)
+        }
+        return {
+            x: result.x * config.scaleX,
+            y: result.y * config.scaleY
+        }
+    }
+    function getRandomPointSet(config) {
+        /*
+        return [
+            config.minX * config.scaleX + " " + config.minY * config.scaleY,
+            config.maxX * config.scaleX + " " + config.maxY * config.scaleY,
+            config.minX * config.scaleX + " " + config.maxY * config.scaleY,
+            config.maxX * config.scaleX + " " + config.minY * config.scaleY
+        ].join("\n");
+        */
+        var a = getRandomPoint(config);
+        var b = getRandomPoint(config);
+        var c = getRandomPoint(config);
+        var d = getRandomPoint(config);
+        return [
+            a.x + " " + a.y,
+            b.x + " " + b.y,
+            c.x + " " + c.y,
+            d.x + " " + d.y
+        ].join("\n");
+    }
+    function pointSetText2data(text) {
+        var lines = text.split(/\n/g);
+        var output = [];
+        var status = true;
+        lines.forEach(function(line) {
+            var values = /^(-?\d*\.?\d*)\s*(-?\d*\.?\d*)/.exec(line);
+            if (values) {
+                var v = {
+                    x: parseFloat(values[1]),
+                    y: parseFloat(values[2])
+                };
+                if (isNaN(v.x) || isNaN(v.y)) return;
+                output.push(v);
+            }
+        });
+        return output;
+    }
+
+    // Xing test implementation: start
+
+    // Xing test implementation: end
+
+    function xingTestPlot(plot, svgContent) {
+        var xing = getSpeedTestFn("PJ");
+        var xingTest = xing(
+            plot.points[0].x, plot.points[0].y,
+            plot.points[1].x, plot.points[1].y,
+            plot.points[2].x, plot.points[2].y,
+            plot.points[3].x, plot.points[3].y,
+        ); 
+        var lineStyle = xingTest ? "polyLineRed" : "polyLineGreen";
+        // Segments
+        svgContent.addLine({
+            "x1": plot.origin.x + plot.points[0].x,
+            "y1": plot.origin.y + plot.points[0].y,
+            "x2": plot.origin.x + plot.points[1].x,
+            "y2": plot.origin.y + plot.points[1].y,
+            "class": lineStyle
+        });
+        svgContent.addLine({
+            "x1": plot.origin.x + plot.points[2].x,
+            "y1": plot.origin.y + plot.points[2].y,
+            "x2": plot.origin.x + plot.points[3].x,
+            "y2": plot.origin.y + plot.points[3].y,
+            "class": lineStyle
+        });
+        // Points
+        for (var i = 0; i < 4; i++) {
+            svgContent.addCircle({
+                "cx": plot.origin.x + plot.points[i].x  + 1,
+                "cy": plot.origin.y +plot.points[i].y + 1,
+                "r": 5,
+                "class": "hitTest"
+            });
+        }
+        // Point labels
+        for (var i = 0; i < 4; i++) {
+            svgContent.addText({
+                "x": plot.origin.x + plot.points[i].x  + 5,
+                "y": plot.origin.y +plot.points[i].y,
+                "class": "pointLabel"
+            }, ["A", "B", "C", "D"][i]);
+        }
+    }
+
+    $("#pointSet").bind("input", function(event) {
+        var pointSetData = pointSetText2data(event.target.value);
+        if (pointSetData.length == 4) {
+            $(event.target).css("background-color","#fff");
+            plot.points = pointSetData;
+            plot.update(xingTestPlot);
+        } else {
+            $(event.target).css("background-color","#fee");
+        }
+    });
+
+    $("#speedTest").bind("click", function(event) {
+        /*
+        Test results (ms):
+        10: 2011
+        11: 5702
+        12: 11941
+        15: 67716
+
+        Ivars:
+        10: 2217
+        11: 4561
+        12:
+        15: 50090
+        */
+
+        var size = parseInt(document.getElementById("speedTestLevel").value, 10);
+        var testId = document.getElementById("speedTestId").value;
+        var checkValidity = document.getElementById("speedTestValidate").checked;
+
+        var totalTests = 0;
+        var totalTrue = 0;
+        var errors = 0;
+        var startTime = new Date();
+        var xingTrue = getSpeedTestFn("PJ"); // the truth fn
+        var xingTest = getSpeedTestFn(testId);
+
+        for (var xa = 0; xa < size; xa++) {
+            for (var ya = 0; ya < size; ya++) {
+                for (var xb = 0; xb < size; xb++) {
+                    for (var yb = 0; yb < size; yb++) {
+                        for (var xc = 0; xc < size; xc++) {
+                            for (var yc = 0; yc < size; yc++) {
+                                for (var xd = 0; xd < size; xd++) {
+                                    for (var yd = 0; yd < size; yd++) {
+                                        totalTests++;
+                                        t = xingTest(xa, ya, xb, yb, xc, yc, xd, yd);
+                                        if (t) totalTrue++;
+                                        if (checkValidity) {
+                                            tt = xingTrue(xa, ya, xb, yb, xc, yc, xd, yd);
+                                            if (t != tt) {
+                                                errors++;
+                                                console.log("Mismatch:", xa, ya, xb, yb, xc, yc, xd, yd);
+                                                if (errors > 10) {
+                                                    console.log("Too many errors!");
+                                                    return;
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        var endTime = new Date();
+        console.log("Test id:", testId);
+        console.log("Level:", size);
+        console.log("Time:", endTime - startTime);
+        console.log("totalTests:", totalTests);
+        console.log("totalTrue:", totalTrue);
+    });
+
+    $("#speedTestEdit").bind("click", function(event) {
+        // Edit the selected test code
+        var testId = document.getElementById("speedTestId").value;
+        $("#editCode")
+            .data('testId', testId)
+            .dialog("open");
+    });
+
+    $("#randomPts").bind("click", function(event) {
+        $("#pointSet").val(getRandomPointSet(plotConfig));
+        $("#pointSet").trigger("input");
+    });
+
+    $("#randomPts").trigger("click");
+
+    // Init the edit code dialog
+    $("#editCode").dialog({
+    	width:750,
+    	height:550,
+        autoOpen: false,
+        modal: true,
+        open: function() {
+        	var testId = $(this).data('testId');
+        	var testCode = speedTestCode[testId];
+        	document.getElementById("speedTestCode").value = testCode;
+        },
+        buttons: {
+        	Ok: function() {
+        		var testId = $(this).data('testId');
+        		var testCode = document.getElementById("speedTestCode").value;
+        		speedTestCode[testId] = testCode;
+	            $(this).dialog('close');
+        	},
+	        Cancel: function() {
+	            $(this).dialog('close');
+	        }
+	    }
+    });
+});
+
+var speedTestCode = {
+    "PJ": `
+        function ori(xa, ya, xb, yb, xc, yc) {
+            var d = (xc - xb) * (yb - ya) - (xb - xa) * (yc - yb); // Remove "var" to get a much less effective code
+            if (d === 0) return 0;
+            return d > 0 ? 1 : -1;
+        }
+
+        function xing(xa, ya, xb, yb, xc, yc, xd, yd) {
+            var oabc = ori(xa, ya, xb, yb, xc, yc);
+            var oabd = ori(xa, ya, xb, yb, xd, yd);
+            var ocda = ori(xc, yc, xd, yd, xa, ya);
+            var ocdb = ori(xc, yc, xd, yd, xb, yb);
+
+            if (oabc !== oabd && ocda !== ocdb) return true;
+
+            if (!oabc && !oabd && !ocda && !ocdb) {
+                if (Math.min(xc, xd) > Math.max(xa, xb)) return false;
+                if (Math.min(yc, yd) > Math.max(ya, yb)) return false;
+                if (Math.min(xa, xb) > Math.max(xc, xd)) return false;
+                if (Math.min(ya, yb) > Math.max(yc, yd)) return false;
+                return true;
+            }
+
+            return false;
+        }
+
+        return xing;
+        `,
+
+    "IT": `
+        function orientation(px, py, qx, qy, rx, ry) {
+            return Math.sign((qy - py) * (rx - qx) - (qx - px) * (ry - qy));
+        }
+        function min(a, b) {
+            return a < b ? a : b;
+        }
+        function max(a, b) {
+            return a > b ? a : b;
+        }
+        function onSegment(px, py, qx, qy, rx, ry) {
+            return  qx <= Math.max(px, rx) && qx >= Math.min(px, rx) &&
+                    qy <= Math.max(py, ry) && qy >= Math.min(py, ry)
+        }
+        function doIntersect(ax, ay, bx, by, cx, cy, dx, dy) {
+            let o1 = orientation(ax, ay, bx, by, cx, cy),
+                o2 = orientation(ax, ay, bx, by, dx, dy),
+                o3 = orientation(cx, cy, dx, dy, ax, ay),
+                o4 = orientation(cx, cy, dx, dy, bx, by);
+            return (o1 !== o2 && o3 !== o4) ||
+                (o1 === 0 && onSegment(ax, ay, cx, cy, bx, by)) ||
+                (o2 === 0 && onSegment(ax, ay, dx, dy, bx, by)) ||
+                (o3 === 0 && onSegment(cx, cy, ax, ay, dx, dy)) ||
+                (o4 === 0 && onSegment(cx, cy, bx, by, dx, dy));
+        }
+
+        return doIntersect;
+        `,
+
+    "RO": `
+        function xing(xa,ya,xb,yb,xc,yc,xd,yd)
+        {
+            //d=(x-x1)(y2-y1)-(y-y1)(x2-x1)
+            var d1 = (xc-xa)*(yb-ya) - (yc-ya)*(xb-xa);
+            var d2 = (xd-xa)*(yb-ya) - (yd-ya)*(xb-xa);
+            var d3 = (xa-xc)*(yd-yc) - (ya-yc)*(xd-xc);
+            var d4 = (xb-xc)*(yd-yc) - (yb-yc)*(xd-xc);
+            if(d1 == 0 || d2 == 0 || d3==0 || d4==0 || ((d1 < 0 != d2<0) && (d3 < 0 != d4 < 0)))
+            {
+                return true;
+            }else
+            {
+                return false;
+            }
+        }
+
+        return xing; 
+        `,
+
+    "DŠ": `
+        function vaiKrustojas(xa, ya, xb, yb, xc, yc, xd, yd){
+            alielX = Math.max(xa, xb);
+            amazX = Math.min(xa, xb);
+            alielY = Math.max(ya, yb);
+            amazY = Math.min(ya, yb);
+
+            blielX = Math.max(xc, xd);
+            bmazX = Math.min(xc, xd);
+            blielY = Math.max(yc, yd);
+            bmazY = Math.min(yc, yd);
+            return (amazX<=blielX&&bmazX<=alielX&&amazY<=blielY&&bmazY<=alielY);
+        }
+
+        return vaiKrustojas;
+        `,
+
+    "empty": `
+        function myFn() xa, ya, xb, yb, xc, yc, xd, yd) {
+            return true;
+        }
+
+        return myFn;
+        `
+}
+
+function getSpeedTestFn(id) {
+    if (id in speedTestCode) {
+        var getCode = [
+            "(function() {",
+            speedTestCode[id],
+            "})()"
+        ].join("\n");
+        try {
+            return eval(getCode);
+        }
+        catch (e) {
+            console.error(e);
+            alert("bad code, check console for error");
+        }
+    } else {
+        return function(){};
+    }
+}
+</script>
+<link rel="stylesheet" href="//code.jquery.com/ui/1.12.1/themes/base/jquery-ui.css">
+<style type="text/css">
+#testbox {
+    position:absolute;
+    left:30px;
+    top:30px;
+    width:800px;
+    height:600px;
+    text-align:center;
+    cursor: crosshair;
+    -moz-user-select: none; -webkit-user-select: none; -ms-user-select:none; user-select:none;-o-user-select:none;
+    border: 1px solid #eee;
+    background-color:#fff;
+}
+#graphics {
+    position: absolute;    
+    width: 100%;
+    height: 100%;
+    top: 0px;
+    left: 0px;
+}
+#graphics svg {
+    width: 100%;
+    height: 100%;
+}
+#inputPanel {
+    position:absolute;
+    left:840px;
+    top:30px;
+    width:250px;
+    height:600px;
+    padding: 10px;
+    text-align:center;
+    border: 1px solid #eee;
+    background-color:#fff;
+}
+#inputPanel h1 {
+    clear: both;
+    font-size: 20px;
+    font-family: sans-serif, Arial;
+    font-weight: bold;
+}
+
+.systemAxisLine {
+    stroke: #8888;
+    stroke-width: 2;
+}
+.systemGridLine {
+    stroke: #eee;
+    stroke-width: 1;
+}
+.polyLineGreen {
+    stroke: #0e0;
+    stroke-width: 2;
+}
+.polyLineRed {
+    stroke: #e00;
+    stroke-width: 1.5;
+}
+
+.hitTest {
+    fill: #00f;
+}
+.pointLabel {
+    fill: #000;
+    font-family: sans-serif;
+}
+
+</style>
+</head>
+<body>
+  <div id="testbox">
+    <div id="graphics"></div>
+  </div>
+  <div id="inputPanel">
+    <h1>Point set</h1>
+    <textarea id="pointSet" style="width:100%; height:70px;"></textarea>
+    <button id="randomPts">Random</button>
+    <h1>Speed test</h1>
+    Level:&nbsp;<select id="speedTestLevel"><option>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option><option>11</option><option>12</option><option>13</option><option>14</option><option>15</option></select>
+    <label><input type="checkbox" id="speedTestValidate" value="x">Check validity</label><br>
+    Test:&nbsp;<select id="speedTestId"><option>PJ</option><option>IT</option><option>RO</option><option>DŠ</option><option>empty</option></select>
+    <button id="speedTestEdit">Edit</button>
+    <p><button id="speedTest">Run</button></p>
+    <p>(Check the console for results)</p>
+  </div>
+  <div id="editCode" title="Edit test code">
+    <textarea id="speedTestCode" style="width:100%; height:100%;"></textarea>
+  </div>
+</body>
+</html>
