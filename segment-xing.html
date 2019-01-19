@@ -91,8 +91,9 @@ $(function() {
             y: result.y * config.scaleY
         }
     }
-    function getRandomPointSet(config) {
+    function getRandomPointSet(config, count) {
         /*
+        // Max expanse
         return [
             config.minX * config.scaleX + " " + config.minY * config.scaleY,
             config.maxX * config.scaleX + " " + config.maxY * config.scaleY,
@@ -100,16 +101,12 @@ $(function() {
             config.maxX * config.scaleX + " " + config.minY * config.scaleY
         ].join("\n");
         */
-        var a = getRandomPoint(config);
-        var b = getRandomPoint(config);
-        var c = getRandomPoint(config);
-        var d = getRandomPoint(config);
-        return [
-            a.x + " " + a.y,
-            b.x + " " + b.y,
-            c.x + " " + c.y,
-            d.x + " " + d.y
-        ].join("\n");
+        var output = [];
+        for (var i = 0; i < count; i++) {
+        	var pt = getRandomPoint(config);
+        	output.push(pt.x + " " + pt.y);
+        }
+        return output.join("\n");
     }
     function pointSetText2data(text) {
         var lines = text.split(/\n/g);
@@ -128,10 +125,6 @@ $(function() {
         });
         return output;
     }
-
-    // Xing test implementation: start
-
-    // Xing test implementation: end
 
     function xingTestPlot(plot, svgContent) {
         var xing = getSpeedTestFn("PJ");
@@ -188,20 +181,6 @@ $(function() {
     });
 
     $("#speedTest").bind("click", function(event) {
-        /*
-        Test results (ms):
-        10: 2011
-        11: 5702
-        12: 11941
-        15: 67716
-
-        Ivars:
-        10: 2217
-        11: 4561
-        12:
-        15: 50090
-        */
-
         var size = parseInt(document.getElementById("speedTestLevel").value, 10);
         var testId = document.getElementById("speedTestId").value;
         var checkValidity = document.getElementById("speedTestValidate").checked;
@@ -260,7 +239,7 @@ $(function() {
     });
 
     $("#randomPts").bind("click", function(event) {
-        $("#pointSet").val(getRandomPointSet(plotConfig));
+        $("#pointSet").val(getRandomPointSet(plotConfig, 4));
         $("#pointSet").trigger("input");
     });
 
@@ -293,106 +272,106 @@ $(function() {
 
 var speedTestCode = {
     "PJ": `
-        function ori(xa, ya, xb, yb, xc, yc) {
-            var d = (xc - xb) * (yb - ya) - (xb - xa) * (yc - yb); // Remove "var" to get a much less effective code
-            if (d === 0) return 0;
-            return d > 0 ? 1 : -1;
-        }
+function ori(xa, ya, xb, yb, xc, yc) {
+    var d = (xc - xb) * (yb - ya) - (xb - xa) * (yc - yb); // Remove "var" to get a much less effective code
+    if (d === 0) return 0;
+    return d > 0 ? 1 : -1;
+}
 
-        function xing(xa, ya, xb, yb, xc, yc, xd, yd) {
-            var oabc = ori(xa, ya, xb, yb, xc, yc);
-            var oabd = ori(xa, ya, xb, yb, xd, yd);
-            var ocda = ori(xc, yc, xd, yd, xa, ya);
-            var ocdb = ori(xc, yc, xd, yd, xb, yb);
+function xing(xa, ya, xb, yb, xc, yc, xd, yd) {
+    var oabc = ori(xa, ya, xb, yb, xc, yc);
+    var oabd = ori(xa, ya, xb, yb, xd, yd);
+    var ocda = ori(xc, yc, xd, yd, xa, ya);
+    var ocdb = ori(xc, yc, xd, yd, xb, yb);
 
-            if (oabc !== oabd && ocda !== ocdb) return true;
+    if (oabc !== oabd && ocda !== ocdb) return true;
 
-            if (!oabc && !oabd && !ocda && !ocdb) {
-                if (Math.min(xc, xd) > Math.max(xa, xb)) return false;
-                if (Math.min(yc, yd) > Math.max(ya, yb)) return false;
-                if (Math.min(xa, xb) > Math.max(xc, xd)) return false;
-                if (Math.min(ya, yb) > Math.max(yc, yd)) return false;
-                return true;
-            }
+    if (!oabc && !oabd && !ocda && !ocdb) {
+        if (Math.min(xc, xd) > Math.max(xa, xb)) return false;
+        if (Math.min(yc, yd) > Math.max(ya, yb)) return false;
+        if (Math.min(xa, xb) > Math.max(xc, xd)) return false;
+        if (Math.min(ya, yb) > Math.max(yc, yd)) return false;
+        return true;
+    }
 
-            return false;
-        }
+    return false;
+}
 
-        return xing;
+return xing;
         `,
 
     "IT": `
-        function orientation(px, py, qx, qy, rx, ry) {
-            return Math.sign((qy - py) * (rx - qx) - (qx - px) * (ry - qy));
-        }
-        function min(a, b) {
-            return a < b ? a : b;
-        }
-        function max(a, b) {
-            return a > b ? a : b;
-        }
-        function onSegment(px, py, qx, qy, rx, ry) {
-            return  qx <= Math.max(px, rx) && qx >= Math.min(px, rx) &&
-                    qy <= Math.max(py, ry) && qy >= Math.min(py, ry)
-        }
-        function doIntersect(ax, ay, bx, by, cx, cy, dx, dy) {
-            let o1 = orientation(ax, ay, bx, by, cx, cy),
-                o2 = orientation(ax, ay, bx, by, dx, dy),
-                o3 = orientation(cx, cy, dx, dy, ax, ay),
-                o4 = orientation(cx, cy, dx, dy, bx, by);
-            return (o1 !== o2 && o3 !== o4) ||
-                (o1 === 0 && onSegment(ax, ay, cx, cy, bx, by)) ||
-                (o2 === 0 && onSegment(ax, ay, dx, dy, bx, by)) ||
-                (o3 === 0 && onSegment(cx, cy, ax, ay, dx, dy)) ||
-                (o4 === 0 && onSegment(cx, cy, bx, by, dx, dy));
-        }
+function orientation(px, py, qx, qy, rx, ry) {
+    return Math.sign((qy - py) * (rx - qx) - (qx - px) * (ry - qy));
+}
+function min(a, b) {
+    return a < b ? a : b;
+}
+function max(a, b) {
+    return a > b ? a : b;
+}
+function onSegment(px, py, qx, qy, rx, ry) {
+    return  qx <= Math.max(px, rx) && qx >= Math.min(px, rx) &&
+            qy <= Math.max(py, ry) && qy >= Math.min(py, ry)
+}
+function doIntersect(ax, ay, bx, by, cx, cy, dx, dy) {
+    let o1 = orientation(ax, ay, bx, by, cx, cy),
+        o2 = orientation(ax, ay, bx, by, dx, dy),
+        o3 = orientation(cx, cy, dx, dy, ax, ay),
+        o4 = orientation(cx, cy, dx, dy, bx, by);
+    return (o1 !== o2 && o3 !== o4) ||
+        (o1 === 0 && onSegment(ax, ay, cx, cy, bx, by)) ||
+        (o2 === 0 && onSegment(ax, ay, dx, dy, bx, by)) ||
+        (o3 === 0 && onSegment(cx, cy, ax, ay, dx, dy)) ||
+        (o4 === 0 && onSegment(cx, cy, bx, by, dx, dy));
+}
 
-        return doIntersect;
+return doIntersect;
         `,
 
     "RO": `
-        function xing(xa,ya,xb,yb,xc,yc,xd,yd)
-        {
-            //d=(x-x1)(y2-y1)-(y-y1)(x2-x1)
-            var d1 = (xc-xa)*(yb-ya) - (yc-ya)*(xb-xa);
-            var d2 = (xd-xa)*(yb-ya) - (yd-ya)*(xb-xa);
-            var d3 = (xa-xc)*(yd-yc) - (ya-yc)*(xd-xc);
-            var d4 = (xb-xc)*(yd-yc) - (yb-yc)*(xd-xc);
-            if(d1 == 0 || d2 == 0 || d3==0 || d4==0 || ((d1 < 0 != d2<0) && (d3 < 0 != d4 < 0)))
-            {
-                return true;
-            }else
-            {
-                return false;
-            }
-        }
+function xing(xa,ya,xb,yb,xc,yc,xd,yd)
+{
+    //d=(x-x1)(y2-y1)-(y-y1)(x2-x1)
+    var d1 = (xc-xa)*(yb-ya) - (yc-ya)*(xb-xa);
+    var d2 = (xd-xa)*(yb-ya) - (yd-ya)*(xb-xa);
+    var d3 = (xa-xc)*(yd-yc) - (ya-yc)*(xd-xc);
+    var d4 = (xb-xc)*(yd-yc) - (yb-yc)*(xd-xc);
+    if(d1 == 0 || d2 == 0 || d3==0 || d4==0 || ((d1 < 0 != d2<0) && (d3 < 0 != d4 < 0)))
+    {
+        return true;
+    }else
+    {
+        return false;
+    }
+}
 
-        return xing; 
+return xing; 
         `,
 
     "DŠ": `
-        function vaiKrustojas(xa, ya, xb, yb, xc, yc, xd, yd){
-            alielX = Math.max(xa, xb);
-            amazX = Math.min(xa, xb);
-            alielY = Math.max(ya, yb);
-            amazY = Math.min(ya, yb);
+function vaiKrustojas(xa, ya, xb, yb, xc, yc, xd, yd){
+    alielX = Math.max(xa, xb);
+    amazX = Math.min(xa, xb);
+    alielY = Math.max(ya, yb);
+    amazY = Math.min(ya, yb);
 
-            blielX = Math.max(xc, xd);
-            bmazX = Math.min(xc, xd);
-            blielY = Math.max(yc, yd);
-            bmazY = Math.min(yc, yd);
-            return (amazX<=blielX&&bmazX<=alielX&&amazY<=blielY&&bmazY<=alielY);
-        }
+    blielX = Math.max(xc, xd);
+    bmazX = Math.min(xc, xd);
+    blielY = Math.max(yc, yd);
+    bmazY = Math.min(yc, yd);
+    return (amazX<=blielX&&bmazX<=alielX&&amazY<=blielY&&bmazY<=alielY);
+}
 
-        return vaiKrustojas;
+return vaiKrustojas;
         `,
 
     "empty": `
-        function myFn() xa, ya, xb, yb, xc, yc, xd, yd) {
-            return true;
-        }
+function myFn() xa, ya, xb, yb, xc, yc, xd, yd) {
+    return true;
+}
 
-        return myFn;
+return myFn;
         `
 }
 
@@ -457,9 +436,15 @@ function getSpeedTestFn(id) {
     font-family: sans-serif, Arial;
     font-weight: bold;
 }
+#speedTestCode {
+    font-family: monospace;
+    font-weight: bold;
+    font-size: 12px;
+    color: #444;
+}
 
 .systemAxisLine {
-    stroke: #8888;
+    stroke: #888;
     stroke-width: 2;
 }
 .systemGridLine {
